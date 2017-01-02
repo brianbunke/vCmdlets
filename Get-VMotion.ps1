@@ -1,12 +1,30 @@
-﻿#Requires -Version 3 -Modules VMware.VimAutomation.Core
+<#PSScriptInfo
+.VERSION 1.0.0
+.GUID e4945281-2135-4365-a194-739fcf54456b
+.AUTHOR Brian Bunke
+.DESCRIPTION Report on recent vMotion events in your VMware environment.
+.COMPANYNAME 
+.COPYRIGHT 
+.TAGS vmware powercli vmotion vcenter
+.LICENSEURI https://github.com/brianbunke/vCmdlets/blob/master/LICENSE
+.PROJECTURI https://github.com/brianbunke/vCmdlets
+.ICONURI 
+.EXTERNALMODULEDEPENDENCIES VMware.VimAutomation.Core
+.REQUIREDSCRIPTS 
+.EXTERNALSCRIPTDEPENDENCIES 
+.RELEASENOTES
+#>
+
+#Requires -Version 3 -Module VMware.VimAutomation.Core
 
 function Get-VMotion {
 <#
 .SYNOPSIS
-View details of recent vMotion and Storage vMotion events.
+Report on recent vMotion events in your VMware environment.
 
 .DESCRIPTION
 Use to check DRS history, or to help with troubleshooting.
+vMotion and Storage vMotion events are returned by default.
 Can filter to view only results from recent days, hours, or minutes (default is 1 day).
 
 For performance, "Get-VMotion" is good. "Get-VM | Get-VMotion" is very slow.
@@ -15,6 +33,11 @@ This means that while one VM and one datacenter will have similar speeds,
 a "Get-VM | Get-VMotion" that contains 50 VMs will take a while.
 
 "Get-Help Get-VMotion -Examples" for some common usage tips.
+
+.NOTES
+Thanks to lucdekens/alanrenouf/sneddo for doing the hard work long ago.
+http://www.lucd.info/2013/03/31/get-the-vmotionsvmotion-history/
+https://github.com/alanrenouf/vCheck-vSphere
 
 .EXAMPLE
 Get-VMotion
@@ -60,10 +83,8 @@ PowerCLI cmdlets Get-Datacenter / Get-Cluster / Get-VM
 [System.Management.Automation.PSCustomObject]
 [vMotion.Object] = arbitrary PSCustomObject typename, to enable default property display
 
-.NOTES
-Thanks to lucdekens/alanrenouf/sneddo for doing the hard work long ago.
-http://www.lucd.info/2013/03/31/get-the-vmotionsvmotion-history/
-https://github.com/alanrenouf/vCheck-vSphere
+.LINK
+http://www.brianbunke.com/blog/2017/01/03/get-vmotion/
 
 .LINK
 https://github.com/brianbunke/vCmdlets
@@ -102,8 +123,7 @@ https://github.com/brianbunke/vCmdlets
 
     BEGIN {
         If (-not $Server) {
-            Write-Warning 'Please open a vCenter session with Connect-VIServer first. Exiting'
-            break
+            throw 'Please open a vCenter session with Connect-VIServer first.'
         }
         Write-Verbose "Processing against vCenter server(s) $("'$Server'" -join ' | ')"
 
