@@ -1,17 +1,4 @@
-﻿<#
-Script name: Get-VMotion.ps1
-Created on: 2016/08/23
-Author: Brian Bunke, @brianbunke
-Description: View details of recent vMotion and Storage vMotion events
-
-===Tested Against Environment====
-vSphere Version: 6.0 U1/U2
-PowerCLI Version: PowerCLI 6.3 R1
-PowerShell Version: 5.0
-OS Version: Windows 7/10
-#>
-
-#Requires -Version 3 -Modules VMware.VimAutomation.Core
+﻿#Requires -Version 3 -Modules VMware.VimAutomation.Core
 
 function Get-VMotion {
 <#
@@ -20,27 +7,49 @@ View details of recent vMotion and Storage vMotion events.
 
 .DESCRIPTION
 Use to check DRS history, or to help with troubleshooting.
-Can filter to just results from recent days, hours, or minutes (default is 1 day).
-Supplying one parent object (Get-Cluster) and filtering later will perform much faster than supplying many VMs.
+Can filter to view only results from recent days, hours, or minutes (default is 1 day).
+
+For performance, "Get-VMotion" is good. "Get-VM | Get-VMotion" is very slow.
+The cmdlet gathers and parses each entity's events one by one.
+This means that while one VM and one datacenter will have similar speeds,
+a "Get-VM | Get-VMotion" that contains 50 VMs will take a while.
+
+"Get-Help Get-VMotion -Examples" for some common usage tips.
 
 .EXAMPLE
 Get-VMotion
 By default, searches $global:DefaultVIServers (all open Connect-VIServer sessions).
-For all datacenters found by Get-Datacenter, view all s/vMotion events from the last day.
+For all datacenters found by Get-Datacenter, view all s/vMotion events in the last 24 hours.
+VM name, type of vMotion (compute or storage), and vMotion start time & duration are returned by default.
 
 .EXAMPLE
-Get-Cluster '*arcade' | Get-VMotion -Hours 8 -Verbose | Where-Object {$_.Type -eq 'vmotion'}
+Get-VMotion -Verbose | Format-List *
+For each s/vMotion event found in Example 1, show all properties instead of the default four.
+Verbose output tracks current progress, and helps when troubleshooting results.
+
+.EXAMPLE
+Get-Cluster '*arcade' | Get-VMotion -Hours 8 | Where-Object {$_.Type -eq 'vmotion'}
 For the cluster Flynn's Arcade, view all vMotions in the last eight hours.
-Verbose output will note each cluster as it is processed.
 NOTE: Piping "Get-Datacenter" or "Get-Cluster" will be much faster than an unfiltered "Get-VM".
 
 .EXAMPLE
->
-PS C:\>$Grid = $global:DefaultVIServers | Where-Object {$_.Name -eq 'Grid'}
+Get-VM 'Sam' | Get-VMotion -Days 30 | Format-List *
+View hosts/datastores the VM "Sam" has been on in the last 30 days,
+when changes happened, and how long any migrations took to complete.
+When supplying VM objects, a generic warning displays once about result speed.
+
+.EXAMPLE
+$Grid = $global:DefaultVIServers | Where-Object {$_.Name -eq 'Grid'}
 PS C:\>Get-VM -Name 'Tron','Rinzler' | Get-VMotion -Days 7 -Server $Grid
 
 View all s/vMotion events for only VMs "Tron" and "Rinzler" in the last week.
-If connected to multiple servers, will only search for events on server Grid.
+If connected to multiple servers, will only search for events on vCenter server Grid.
+
+.EXAMPLE
+Get-VMotion | Select-Object Name,Type,Duration | Sort-Object Duration
+For all s/vMotions in the last day, return only VM name, vMotion type, and total migration time.
+Sort all events from fastest to slowest.
+Selecting < 5 properties automatically formats output in a table, instead of a list.
 
 .INPUTS
 [VMware.VimAutomation.ViCore.Types.V1.Inventory.InventoryItem[]]
@@ -48,6 +57,8 @@ PowerCLI cmdlets Get-Datacenter / Get-Cluster / Get-VM
 
 .OUTPUTS
 [System.Collections.ArrayList]
+[System.Management.Automation.PSCustomObject]
+[vMotion.Object] = arbitrary PSCustomObject typename, to enable default property display
 
 .NOTES
 Thanks to lucdekens/alanrenouf/sneddo for doing the hard work long ago.
@@ -55,10 +66,7 @@ http://www.lucd.info/2013/03/31/get-the-vmotionsvmotion-history/
 https://github.com/alanrenouf/vCheck-vSphere
 
 .LINK
-https://github.com/vmware/PowerCLI-Example-Scripts
-
-.LINK
-https://github.com/brianbunke
+https://github.com/brianbunke/vCmdlets
 #>
     [CmdletBinding(DefaultParameterSetName='Days')]
     [OutputType([System.Collections.ArrayList])]
@@ -97,14 +105,16 @@ https://github.com/brianbunke
             Write-Warning 'Please open a vCenter session with Connect-VIServer first. Exiting'
             break
         }
-        Write-Verbose "Processing against vCenter server(s) $($Server -join ' | ')"
+        Write-Verbose "Processing against vCenter server(s) $("'$Server'" -join ' | ')"
 
         # Based on parameter supplied, set $Time for $EventFilter below
         switch ($PSCmdlet.ParameterSetName) {
-            'Days'    {$Time = (Get-Date).AddDays(-$Days)}
-            'Hours'   {$Time = (Get-Date).AddHours(-$Hours)}
-            'Minutes' {$Time = (Get-Date).AddMinutes(-$Minutes)}
+            'Days'    {$Time = (Get-Date).AddDays(-$Days).ToUniversalTime()}
+            'Hours'   {$Time = (Get-Date).AddHours(-$Hours).ToUniversalTime()}
+            'Minutes' {$Time = (Get-Date).AddMinutes(-$Minutes).ToUniversalTime()}
         }
+        Write-Verbose "Using parameter set $($PSCmdlet.ParameterSetName)"
+        Write-Verbose "Searching for all vMotion events since $($Time.ToString()) UTC"
 
         # Construct an empty array for events returned
         # Performs faster than @() when appending; matters if running against many VMs
@@ -123,34 +133,56 @@ https://github.com/brianbunke
 
     PROCESS {
         ForEach ($vCenter in $Server) {
-            $EventMgr = Get-View EventManager -Server $vCenter
+            Write-Verbose "Searching for events in vCenter server '$vCenter'"
+            Write-Verbose "Calling Get-View for EventManager against server '$vCenter'"
+            $EventMgr = Get-View EventManager -Server $vCenter -Verbose:$false
 
-            # If an inventory item was not supplied, return datacenter object(s)
             If ($Entity) {
+                # Acknowledge user-supplied inventory item(s)
                 $InventoryObjects = $Entity
             } Else {
-                $InventoryObjects = Get-Datacenter -Server $vCenter
+                # If -Entity was not specified, return datacenter object(s)
+                Write-Verbose "Calling Get-Datacenter to process all objects in server '$vCenter'"
+                $InventoryObjects = Get-Datacenter -Server $vCenter -Verbose:$false
             }
 
             $InventoryObjects | ForEach-Object {
-                Write-Verbose "Processing inventory object $($_.Name)"
+                Write-Verbose "Processing $($_.GetType().Name) inventory object $($_.Name)"
+
+                # Warn once against using VMs in -Entity parameter
+                If ($_.GetType().Name -match 'VirtualMachine' -and $AlreadyWarnedAboutVMs -eq $null) {
+                    Write-Warning 'Script must process VM objects one by one, which slows down results.'
+                    Write-Warning 'Consider supplying parent Cluster(s) or Datacenter(s) to -Entity parameter, if possible.'
+                    $AlreadyWarnedAboutVMs = $true
+                }
 
                 # Add the entity details for the current loop of the Process block
                 $EventFilter.Entity.Entity = $_.ExtensionData.MoRef
                 $EventFilter.Entity.Recursion = &{
-                    If ($_.ExtensionData.MoRef.Type -eq 'VirtualMachine') {'self'} Else {'all'}}
+                    If ($_.ExtensionData.MoRef.Type -eq 'VirtualMachine') {'self'} Else {'all'}
+                }
                 # Create the event collector, and collect 100 events at a time
-                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) -Server $vCenter
+                Write-Verbose "Calling Get-View to gather event results for object $($_.Name)"
+                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) -Server $vCenter -Verbose:$false
                 $Buffer = $Collector.ReadNextEvents(100)
+
+                $EventCount = ($Buffer | Measure-Object).Count
+                If ($EventCount -lt 1) {
+                    Write-Verbose "No vMotion events found for object $($_.Name)"
+                }
+
                 While ($Buffer) {
-                    # Append the 100 results into the $Events array
-                    If (($Buffer | Measure-Object).Count -gt 1) {
+                    Write-Verbose "Processing $EventCount events from object $($_.Name)"
+
+                    # Append up to 100 results into the $Events array
+                    If ($EventCount -gt 1) {
                         # .AddRange if more than one event
                         $Events.AddRange($Buffer) | Out-Null
                     } Else {
                         # .Add if only one event; should never happen since gathering begin & end events
                         $Events.Add($Buffer) | Out-Null
                     }
+                    # Were there more than 100 results? Get the next batch and restart the While loop
                     $Buffer = $Collector.ReadNextEvents(100)
                 }
                 # Destroy the collector after each entity to avoid running out of memory :)
@@ -182,21 +214,36 @@ https://github.com/brianbunke
 
                 # Add the current vMotion into the $Results array
                 $Results.Add([PSCustomObject][Ordered]@{
-                    Name      = $vMotion.Group[0].Vm.Name
-                    Type      = $Type
-                    SrcHost   = $vMotion.Group[0].Host.Name
-                    DstHost   = $vMotion.Group[0].DestHost.Name
-                    SrcDS     = $vMotion.Group[0].Ds.Name
-                    DstDS     = $vMotion.Group[0].DestDatastore.Name
+                    PSTypeName = 'vMotion.Object'
+                    Name       = $vMotion.Group[0].Vm.Name
+                    Type       = $Type
+                    SrcHost    = $vMotion.Group[0].Host.Name
+                    DstHost    = $vMotion.Group[0].DestHost.Name
+                    SrcDS      = $vMotion.Group[0].Ds.Name
+                    DstDS      = $vMotion.Group[0].DestDatastore.Name
                     # Hopefully people aren't performing vMotions that take >24 hours, because I'm ignoring days in the string
-                    Duration  = (New-TimeSpan -Start $vMotion.Group[0].CreatedTime -End $vMotion.Group[1].CreatedTime).ToString('hh\:mm\:ss')
-                    StartTime = $vMotion.Group[0].CreatedTime
-                    EndTime   = $vMotion.Group[1].CreatedTime
+                    Duration   = (New-TimeSpan -Start $vMotion.Group[0].CreatedTime -End $vMotion.Group[1].CreatedTime).ToString('hh\:mm\:ss')
+                    StartTime  = $vMotion.Group[0].CreatedTime
+                    EndTime    = $vMotion.Group[1].CreatedTime
                     # Making an assumption that all events with an empty username are DRS-initiated
-                    Username  = &{If ($vMotion.Group[0].UserName) {$vMotion.Group[0].UserName} Else {'DRS'}}
+                    Username   = &{If ($vMotion.Group[0].UserName) {$vMotion.Group[0].UserName} Else {'DRS'}}
+                    ChainID    = $vMotion.Group[0].ChainID
                 }) | Out-Null
-            } #IfGroup
+            } #If vMotion Group % 2
+            ElseIf ($vMotion.Group.Count % 2 -eq 1) {
+                Write-Verbose "vMotion chain ID $($vMotion.Group[0].ChainID) had an odd number of events. Cannot match start/end times; skipping"
+            }
         } #ForEach ChainID
+
+        # Reduce default property set for readability
+        $TypeData = @{
+            TypeName = 'vMotion.Object'
+            DefaultDisplayPropertySet = 'Name','Duration','Type','StartTime'
+        }
+        # Include -Force to avoid errors after the first run
+        Update-TypeData @TypeData -Force
+
+        # Display all results found
         $Results
     } #End
 }
