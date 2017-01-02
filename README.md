@@ -5,7 +5,7 @@ This is a repository to hold my personal contributions to VMware's [PowerCLI Com
 
 Most cmdlets here will include conventions of that repository, such as the opening comment block of basic information independent of comment-based help.
 
-[PowerCLI] is a collection of official PowerShell modules provided by VMware to interact with VMware solutions.
+[PowerCLI] is a collection of official PowerShell modules provided by VMware to interact with VMware products.
 
 All scripts are available as is, and are run at your own risk in a production environment.
 
