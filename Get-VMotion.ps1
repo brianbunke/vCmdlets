@@ -1,9 +1,9 @@
 <#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.0.1
 .GUID e4945281-2135-4365-a194-739fcf54456b
 .AUTHOR Brian Bunke
 .DESCRIPTION Report on recent vMotion events in your VMware environment.
-.COMPANYNAME 
+.COMPANYNAME brianbunke
 .COPYRIGHT 
 .TAGS vmware powercli vmotion vcenter
 .LICENSEURI https://github.com/brianbunke/vCmdlets/blob/master/LICENSE
@@ -13,6 +13,8 @@
 .REQUIREDSCRIPTS 
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
+1.0.1 - 2017/10/12 - Fix improper filtering on VCSA 6.5
+1.0.0 - 2017/01/02 - Initial release
 #>
 
 #Requires -Version 3 -Module VMware.VimAutomation.Core
@@ -146,7 +148,8 @@ https://github.com/brianbunke/vCmdlets
         $EventFilter.Entity = New-Object VMware.Vim.EventFilterSpecByEntity
         $EventFilter.Time   = New-Object VMware.Vim.EventFilterSpecByTime
         $EventFilter.Time.BeginTime = $Time
-        $EventFilter.Category = 'Info'
+        # After moving from Win 6.0 to VCSA 6.5, apparently the Category filter no longer works?
+        # $EventFilter.Category = 'Info'
         $EventFilter.DisableFullMessage = $true
         $EventFilter.EventTypeID = 'VmMigratedEvent', 'DrsVmMigratedEvent', 'VmBeingHotMigratedEvent', 'VmBeingMigratedEvent'
     } #Begin
@@ -171,8 +174,8 @@ https://github.com/brianbunke/vCmdlets
 
                 # Warn once against using VMs in -Entity parameter
                 If ($_.GetType().Name -match 'VirtualMachine' -and $AlreadyWarnedAboutVMs -eq $null) {
-                    Write-Warning 'Script must process VM objects one by one, which slows down results.'
-                    Write-Warning 'Consider supplying parent Cluster(s) or Datacenter(s) to -Entity parameter, if possible.'
+                    Write-Warning 'Get-VMotion must process VM objects one by one, which slows down results.'
+                    Write-Warning 'Consider supplying parent Cluster(s) or Datacenter(s) to -Entity parameter.'
                     $AlreadyWarnedAboutVMs = $true
                 }
 
@@ -251,7 +254,8 @@ https://github.com/brianbunke/vCmdlets
                 }) | Out-Null
             } #If vMotion Group % 2
             ElseIf ($vMotion.Group.Count % 2 -eq 1) {
-                Write-Verbose "vMotion chain ID $($vMotion.Group[0].ChainID) had an odd number of events. Cannot match start/end times; skipping"
+                Write-Debug "vMotion chain ID $($vMotion.Group[0].ChainID) had an odd number of events; cannot match start/end times. Inspect `$vMotion for more details"
+                # Happening much more often for me on VCSA 6.5 (after Windows 6.0). Not sure why
             }
         } #ForEach ChainID
 
