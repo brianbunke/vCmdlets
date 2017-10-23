@@ -119,7 +119,7 @@ https://github.com/brianbunke/vCmdlets
 
         # Specifies the vCenter Server system(s) on which you want to run the cmdlet.
         # If no value is passed to this parameter, the command runs on the default servers.
-        # For more information about default servers, see the description of Connect-VIServer.
+        # For more information about default servers, "Get-Help Connect-VIServer".
         [VMware.VimAutomation.Types.VIServer[]]$Server = $global:DefaultVIServers
     )
 
@@ -136,7 +136,7 @@ https://github.com/brianbunke/vCmdlets
             'Minutes' {$Time = (Get-Date).AddMinutes(-$Minutes).ToUniversalTime()}
         }
         Write-Verbose "Using parameter set $($PSCmdlet.ParameterSetName)"
-        Write-Verbose "Searching for all vMotion events since $($Time.ToString()) UTC"
+        Write-Verbose "Searching for all vMotion events since $($Time.ToLocalTime().ToString())"
 
         # Construct an empty array for events returned
         # Performs faster than @() when appending; matters if running against many VMs
@@ -164,7 +164,7 @@ https://github.com/brianbunke/vCmdlets
         ForEach ($vCenter in $Server) {
             Write-Verbose "Searching for events in vCenter server '$vCenter'"
             Write-Verbose "Calling Get-View for EventManager against server '$vCenter'"
-            $EventMgr = Get-View EventManager -Server $vCenter -Verbose:$false
+            $EventMgr = Get-View EventManager -Server $vCenter -Verbose:$false -Debug:$false
 
             If ($Entity) {
                 # Acknowledge user-supplied inventory item(s)
@@ -172,7 +172,7 @@ https://github.com/brianbunke/vCmdlets
             } Else {
                 # If -Entity was not specified, return datacenter object(s)
                 Write-Verbose "Calling Get-Datacenter to process all objects in server '$vCenter'"
-                $InventoryObjects = Get-Datacenter -Server $vCenter -Verbose:$false
+                $InventoryObjects = Get-Datacenter -Server $vCenter -Verbose:$false -Debug:$false
             }
 
             $InventoryObjects | ForEach-Object {
@@ -192,7 +192,7 @@ https://github.com/brianbunke/vCmdlets
                 }
                 # Create the event collector, and collect 100 events at a time
                 Write-Verbose "Calling Get-View to gather event results for object $($_.Name)"
-                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) -Server $vCenter -Verbose:$false
+                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) -Server $vCenter -Verbose:$false -Debug:$false
                 $Buffer = $Collector.ReadNextEvents(100)
 
                 If (-not $Buffer) {
@@ -234,60 +234,43 @@ https://github.com/brianbunke/vCmdlets
             If ($vMotion.Group.Count % 2 -eq 0) {
                 # New 6.5 migration event type is changing fields around on me
                 If ($vMotion.Group[0].EventTypeID -eq 'com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent') {
-                    # Mark the current vMotion as vMotion / Storage vMotion / Both
-                    If ($vMotion.Group[0].Ds.Name -eq ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destDatastore'}).Value) {
-                        $Type = 'vMotion'
-                    } ElseIf ($vMotion.Group[0].Host.Name -eq ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destHost'}).Value) {
-                        $Type = 's-vMotion'
-                    } Else {
-                        $Type = 'Both'
-                    }
-
-                    # Add the current vMotion into the $Results array
-                    $Results.Add([PSCustomObject][Ordered]@{
-                        PSTypeName = 'vMotion.Object'
-                        Name       = $vMotion.Group[0].Vm.Name
-                        Type       = $Type
-                        SrcHost    = $vMotion.Group[0].Host.Name
-                        DstHost    = $vMotion.Group[0].Arguments['destHost']
-                        SrcDS      = $vMotion.Group[0].Ds.Name
-                        DstDS      = $vMotion.Group[0].Arguments['destDatastore']
-                        # Hopefully people aren't performing vMotions that take >24 hours, because I'm ignoring days in the string
-                        Duration   = (New-TimeSpan -Start $vMotion.Group[0].CreatedTime -End $vMotion.Group[1].CreatedTime).ToString('hh\:mm\:ss')
-                        StartTime  = $vMotion.Group[0].CreatedTime
-                        EndTime    = $vMotion.Group[1].CreatedTime
-                        # Making an assumption that all events with an empty username are DRS-initiated
-                        Username   = &{If ($vMotion.Group[0].UserName) {$vMotion.Group[0].UserName} Else {'DRS'}}
-                        ChainID    = $vMotion.Group[0].ChainID
-                    }) | Out-Null
+                    $DstDC   = ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destDatacenter'}).Value
+                    $DstDS   = ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destDatastore'}).Value
+                    $DstHost = ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destHost'}).Value
                 } Else {
-                    # Mark the current vMotion as vMotion / Storage vMotion / Both
-                    If ($vMotion.Group[0].Ds.Name -eq $vMotion.Group[0].DestDatastore.Name) {
-                        $Type = 'vMotion'
-                    } ElseIf ($vMotion.Group[0].Host.Name -eq $vMotion.Group[0].DestHost.Name) {
-                        $Type = 's-vMotion'
-                    } Else {
-                        $Type = 'Both'
-                    }
-
-                    # Add the current vMotion into the $Results array
-                    $Results.Add([PSCustomObject][Ordered]@{
-                        PSTypeName = 'vMotion.Object'
-                        Name       = $vMotion.Group[0].Vm.Name
-                        Type       = $Type
-                        SrcHost    = $vMotion.Group[0].Host.Name
-                        DstHost    = $vMotion.Group[0].DestHost.Name
-                        SrcDS      = $vMotion.Group[0].Ds.Name
-                        DstDS      = $vMotion.Group[0].DestDatastore.Name
-                        # Hopefully people aren't performing vMotions that take >24 hours, because I'm ignoring days in the string
-                        Duration   = (New-TimeSpan -Start $vMotion.Group[0].CreatedTime -End $vMotion.Group[1].CreatedTime).ToString('hh\:mm\:ss')
-                        StartTime  = $vMotion.Group[0].CreatedTime
-                        EndTime    = $vMotion.Group[1].CreatedTime
-                        # Making an assumption that all events with an empty username are DRS-initiated
-                        Username   = &{If ($vMotion.Group[0].UserName) {$vMotion.Group[0].UserName} Else {'DRS'}}
-                        ChainID    = $vMotion.Group[0].ChainID
-                    }) | Out-Null
+                    $DstDC   = $vMotion.Group[0].DestDatacenter.Name
+                    $DstDS   = $vMotion.Group[0].DestDatastore.Name
+                    $DstHost = $vMotion.Group[0].DestHost.Name
                 } #If 'com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent'
+
+                # Mark the current vMotion as vMotion / Storage vMotion / Both
+                If ($vMotion.Group[0].Ds.Name -eq $DstDS) {
+                    $Type = 'vMotion'
+                } ElseIf ($vMotion.Group[0].Host.Name -eq $DstHost) {
+                    $Type = 's-vMotion'
+                } Else {
+                    $Type = 'Both'
+                }
+
+                # Add the current vMotion into the $Results array
+                $Results.Add([PSCustomObject][Ordered]@{
+                    PSTypeName = 'vMotion.Object'
+                    Name       = $vMotion.Group[0].Vm.Name
+                    Type       = $Type
+                    SrcHost    = $vMotion.Group[0].Host.Name
+                    DstHost    = $DstHost
+                    SrcDS      = $vMotion.Group[0].Ds.Name
+                    DstDS      = $DstDS
+                    SrcDC      = $vMotion.Group[0].Datacenter.Name
+                    DstDC      = $DstDC
+                    # Hopefully people aren't performing vMotions that take >24 hours, because I'm ignoring days in the string
+                    Duration   = (New-TimeSpan -Start $vMotion.Group[0].CreatedTime -End $vMotion.Group[1].CreatedTime).ToString('hh\:mm\:ss')
+                    StartTime  = $vMotion.Group[0].CreatedTime.ToLocalTime()
+                    EndTime    = $vMotion.Group[1].CreatedTime.ToLocalTime()
+                    # Making an assumption that all events with an empty username are DRS-initiated
+                    Username   = &{If ($vMotion.Group[0].UserName) {$vMotion.Group[0].UserName} Else {'DRS'}}
+                    ChainID    = $vMotion.Group[0].ChainID
+                }) | Out-Null
             } #If vMotion Group % 2
             ElseIf ($vMotion.Group.Count % 2 -eq 1) {
                 Write-Debug "vMotion chain ID $($vMotion.Group[0].ChainID) had an odd number of events; cannot match start/end times. Inspect `$vMotion for more details"
