@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.1
+.VERSION 1.1.0
 .GUID e4945281-2135-4365-a194-739fcf54456b
 .AUTHOR Brian Bunke
 .DESCRIPTION Report on recent vMotion events in your VMware environment.
@@ -13,6 +13,7 @@
 .REQUIREDSCRIPTS 
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
+1.1.0 - 2017/10/24 - Support new Encrypted vMotion type in 6.5; localize time
 1.0.1 - 2017/10/12 - Fix improper filtering on VCSA 6.5
 1.0.0 - 2017/01/02 - Initial release
 #>
@@ -34,6 +35,8 @@ The cmdlet gathers and parses each entity's events one by one.
 This means that while one VM and one datacenter will have similar speeds,
 a "Get-VM | Get-VMotion" that contains 50 VMs will take a while.
 
+Get-VMotion has been tested on Windows 6.0 and VCSA 6.5 vCenter servers.
+
 "Get-Help Get-VMotion -Examples" for some common usage tips.
 
 .NOTES
@@ -45,7 +48,7 @@ https://github.com/alanrenouf/vCheck-vSphere
 Get-VMotion
 By default, searches $global:DefaultVIServers (all open Connect-VIServer sessions).
 For all datacenters found by Get-Datacenter, view all s/vMotion events in the last 24 hours.
-VM name, type of vMotion (compute or storage), and vMotion start time & duration are returned by default.
+VM name, vMotion type (compute/storage/both), start time, and duration are returned by default.
 
 .EXAMPLE
 Get-VMotion -Verbose | Format-List *
@@ -179,10 +182,10 @@ https://github.com/brianbunke/vCmdlets
                 Write-Verbose "Processing $($_.GetType().Name) inventory object $($_.Name)"
 
                 # Warn once against using VMs in -Entity parameter
-                If ($_.GetType().Name -match 'VirtualMachine' -and $AlreadyWarnedAboutVMs -eq $null) {
+                If ($_.GetType().Name -match 'VirtualMachine' -and $AlreadyWarned -eq $null) {
                     Write-Warning 'Get-VMotion must process VM objects one by one, which slows down results.'
                     Write-Warning 'Consider supplying parent Cluster(s) or Datacenter(s) to -Entity parameter.'
-                    $AlreadyWarnedAboutVMs = $true
+                    $AlreadyWarned = $true
                 }
 
                 # Add the entity details for the current loop of the Process block
@@ -192,7 +195,12 @@ https://github.com/brianbunke/vCmdlets
                 }
                 # Create the event collector, and collect 100 events at a time
                 Write-Verbose "Calling Get-View to gather event results for object $($_.Name)"
-                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) -Server $vCenter -Verbose:$false -Debug:$false
+                $CollectorSplat = @{
+                    Server  = $vCenter
+                    Verbose = $false
+                    Debug   = $false
+                }
+                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) @CollectorSplat
                 $Buffer = $Collector.ReadNextEvents(100)
 
                 If (-not $Buffer) {
@@ -273,8 +281,8 @@ https://github.com/brianbunke/vCmdlets
                 }) | Out-Null
             } #If vMotion Group % 2
             ElseIf ($vMotion.Group.Count % 2 -eq 1) {
-                Write-Debug "vMotion chain ID $($vMotion.Group[0].ChainID) had an odd number of events; cannot match start/end times. Inspect `$vMotion for more details"
-                # Happening much more often for me on VCSA 6.5 (after Windows 6.0). Not sure why
+                Write-Debug "vMotion chain ID $($vMotion.Group[0].ChainID -join ', ') had an odd number of events; cannot match start/end times. Inspect `$vMotion for more details"
+                # If you're here, try to gather some details and tell me what happened! @brianbunke
             }
         } #ForEach ChainID
 
