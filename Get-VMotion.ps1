@@ -1,19 +1,19 @@
 <#PSScriptInfo
-.VERSION 1.1.0
-.GUID e4945281-2135-4365-a194-739fcf54456b
-.AUTHOR Brian Bunke
+.VERSION     1.1.0
+.GUID        e4945281-2135-4365-a194-739fcf54456b
+.AUTHOR      Brian Bunke
 .DESCRIPTION Report on recent vMotion events in your VMware environment.
 .COMPANYNAME brianbunke
 .COPYRIGHT 
-.TAGS vmware powercli vmotion vcenter
-.LICENSEURI https://github.com/brianbunke/vCmdlets/blob/master/LICENSE
-.PROJECTURI https://github.com/brianbunke/vCmdlets
+.TAGS        vmware powercli vmotion vcenter
+.LICENSEURI  https://github.com/brianbunke/vCmdlets/blob/master/LICENSE
+.PROJECTURI  https://github.com/brianbunke/vCmdlets
 .ICONURI 
 .EXTERNALMODULEDEPENDENCIES VMware.VimAutomation.Core
 .REQUIREDSCRIPTS 
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
-1.1.0 - 2017/10/24 - Support new Encrypted vMotion type in 6.5; localize time
+1.1.0 - 2017/10/24 - Support new Encrypted vMotion type in 6.5; localize time; add datacenter properties
 1.0.1 - 2017/10/12 - Fix improper filtering on VCSA 6.5
 1.0.0 - 2017/01/02 - Initial release
 #>
@@ -89,7 +89,7 @@ PowerCLI cmdlets Get-Datacenter / Get-Cluster / Get-VM
 [vMotion.Object] = arbitrary PSCustomObject typename, to enable default property display
 
 .LINK
-http://www.brianbunke.com/blog/2017/01/03/get-vmotion/
+http://www.brianbunke.com/blog/2017/10/25/get-vmotion-65/
 
 .LINK
 https://github.com/brianbunke/vCmdlets
@@ -146,7 +146,6 @@ https://github.com/brianbunke/vCmdlets
         $Events = New-Object System.Collections.ArrayList
 
         # Build a vMotion-specific event filter query
-        # http://pubs.vmware.com/vsphere-60/index.jsp#com.vmware.wssdk.apiref.doc/vim.event.EventManager.html
         $EventFilter        = New-Object VMware.Vim.EventFilterSpec
         $EventFilter.Entity = New-Object VMware.Vim.EventFilterSpecByEntity
         $EventFilter.Time   = New-Object VMware.Vim.EventFilterSpecByTime
