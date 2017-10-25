@@ -1,18 +1,19 @@
 <#PSScriptInfo
-.VERSION 1.0.1
-.GUID e4945281-2135-4365-a194-739fcf54456b
-.AUTHOR Brian Bunke
+.VERSION     1.1.0
+.GUID        e4945281-2135-4365-a194-739fcf54456b
+.AUTHOR      Brian Bunke
 .DESCRIPTION Report on recent vMotion events in your VMware environment.
 .COMPANYNAME brianbunke
 .COPYRIGHT 
-.TAGS vmware powercli vmotion vcenter
-.LICENSEURI https://github.com/brianbunke/vCmdlets/blob/master/LICENSE
-.PROJECTURI https://github.com/brianbunke/vCmdlets
+.TAGS        vmware powercli vmotion vcenter
+.LICENSEURI  https://github.com/brianbunke/vCmdlets/blob/master/LICENSE
+.PROJECTURI  https://github.com/brianbunke/vCmdlets
 .ICONURI 
 .EXTERNALMODULEDEPENDENCIES VMware.VimAutomation.Core
 .REQUIREDSCRIPTS 
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
+1.1.0 - 2017/10/24 - Support new Encrypted vMotion type in 6.5; localize time; add datacenter properties
 1.0.1 - 2017/10/12 - Fix improper filtering on VCSA 6.5
 1.0.0 - 2017/01/02 - Initial release
 #>
@@ -34,6 +35,8 @@ The cmdlet gathers and parses each entity's events one by one.
 This means that while one VM and one datacenter will have similar speeds,
 a "Get-VM | Get-VMotion" that contains 50 VMs will take a while.
 
+Get-VMotion has been tested on Windows 6.0 and VCSA 6.5 vCenter servers.
+
 "Get-Help Get-VMotion -Examples" for some common usage tips.
 
 .NOTES
@@ -45,7 +48,7 @@ https://github.com/alanrenouf/vCheck-vSphere
 Get-VMotion
 By default, searches $global:DefaultVIServers (all open Connect-VIServer sessions).
 For all datacenters found by Get-Datacenter, view all s/vMotion events in the last 24 hours.
-VM name, type of vMotion (compute or storage), and vMotion start time & duration are returned by default.
+VM name, vMotion type (compute/storage/both), start time, and duration are returned by default.
 
 .EXAMPLE
 Get-VMotion -Verbose | Format-List *
@@ -86,7 +89,7 @@ PowerCLI cmdlets Get-Datacenter / Get-Cluster / Get-VM
 [vMotion.Object] = arbitrary PSCustomObject typename, to enable default property display
 
 .LINK
-http://www.brianbunke.com/blog/2017/01/03/get-vmotion/
+http://www.brianbunke.com/blog/2017/10/25/get-vmotion-65/
 
 .LINK
 https://github.com/brianbunke/vCmdlets
@@ -119,7 +122,7 @@ https://github.com/brianbunke/vCmdlets
 
         # Specifies the vCenter Server system(s) on which you want to run the cmdlet.
         # If no value is passed to this parameter, the command runs on the default servers.
-        # For more information about default servers, see the description of Connect-VIServer.
+        # For more information about default servers, "Get-Help Connect-VIServer".
         [VMware.VimAutomation.Types.VIServer[]]$Server = $global:DefaultVIServers
     )
 
@@ -136,14 +139,13 @@ https://github.com/brianbunke/vCmdlets
             'Minutes' {$Time = (Get-Date).AddMinutes(-$Minutes).ToUniversalTime()}
         }
         Write-Verbose "Using parameter set $($PSCmdlet.ParameterSetName)"
-        Write-Verbose "Searching for all vMotion events since $($Time.ToString()) UTC"
+        Write-Verbose "Searching for all vMotion events since $($Time.ToLocalTime().ToString())"
 
         # Construct an empty array for events returned
         # Performs faster than @() when appending; matters if running against many VMs
         $Events = New-Object System.Collections.ArrayList
 
         # Build a vMotion-specific event filter query
-        # http://pubs.vmware.com/vsphere-60/index.jsp#com.vmware.wssdk.apiref.doc/vim.event.EventManager.html
         $EventFilter        = New-Object VMware.Vim.EventFilterSpec
         $EventFilter.Entity = New-Object VMware.Vim.EventFilterSpecByEntity
         $EventFilter.Time   = New-Object VMware.Vim.EventFilterSpecByTime
@@ -151,14 +153,20 @@ https://github.com/brianbunke/vCmdlets
         # After moving from Win 6.0 to VCSA 6.5, apparently the Category filter no longer works?
         # $EventFilter.Category = 'Info'
         $EventFilter.DisableFullMessage = $true
-        $EventFilter.EventTypeID = 'VmMigratedEvent', 'DrsVmMigratedEvent', 'VmBeingHotMigratedEvent', 'VmBeingMigratedEvent'
+        $EventFilter.EventTypeID = @(
+            'com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent',
+            'DrsVmMigratedEvent',
+            'VmBeingHotMigratedEvent',
+            'VmBeingMigratedEvent',
+            'VmMigratedEvent'
+        )
     } #Begin
 
     PROCESS {
         ForEach ($vCenter in $Server) {
             Write-Verbose "Searching for events in vCenter server '$vCenter'"
             Write-Verbose "Calling Get-View for EventManager against server '$vCenter'"
-            $EventMgr = Get-View EventManager -Server $vCenter -Verbose:$false
+            $EventMgr = Get-View EventManager -Server $vCenter -Verbose:$false -Debug:$false
 
             If ($Entity) {
                 # Acknowledge user-supplied inventory item(s)
@@ -166,17 +174,17 @@ https://github.com/brianbunke/vCmdlets
             } Else {
                 # If -Entity was not specified, return datacenter object(s)
                 Write-Verbose "Calling Get-Datacenter to process all objects in server '$vCenter'"
-                $InventoryObjects = Get-Datacenter -Server $vCenter -Verbose:$false
+                $InventoryObjects = Get-Datacenter -Server $vCenter -Verbose:$false -Debug:$false
             }
 
             $InventoryObjects | ForEach-Object {
                 Write-Verbose "Processing $($_.GetType().Name) inventory object $($_.Name)"
 
                 # Warn once against using VMs in -Entity parameter
-                If ($_.GetType().Name -match 'VirtualMachine' -and $AlreadyWarnedAboutVMs -eq $null) {
+                If ($_.GetType().Name -match 'VirtualMachine' -and $AlreadyWarned -eq $null) {
                     Write-Warning 'Get-VMotion must process VM objects one by one, which slows down results.'
                     Write-Warning 'Consider supplying parent Cluster(s) or Datacenter(s) to -Entity parameter.'
-                    $AlreadyWarnedAboutVMs = $true
+                    $AlreadyWarned = $true
                 }
 
                 # Add the entity details for the current loop of the Process block
@@ -186,15 +194,20 @@ https://github.com/brianbunke/vCmdlets
                 }
                 # Create the event collector, and collect 100 events at a time
                 Write-Verbose "Calling Get-View to gather event results for object $($_.Name)"
-                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) -Server $vCenter -Verbose:$false
+                $CollectorSplat = @{
+                    Server  = $vCenter
+                    Verbose = $false
+                    Debug   = $false
+                }
+                $Collector = Get-View ($EventMgr).CreateCollectorForEvents($EventFilter) @CollectorSplat
                 $Buffer = $Collector.ReadNextEvents(100)
 
-                $EventCount = ($Buffer | Measure-Object).Count
-                If ($EventCount -lt 1) {
+                If (-not $Buffer) {
                     Write-Verbose "No vMotion events found for object $($_.Name)"
                 }
 
                 While ($Buffer) {
+                    $EventCount = ($Buffer | Measure-Object).Count
                     Write-Verbose "Processing $EventCount events from object $($_.Name)"
 
                     # Append up to 100 results into the $Events array
@@ -226,10 +239,21 @@ https://github.com/brianbunke/vCmdlets
             # "% 2" correctly processes duplicate vMotion results
             # (duplicate results can occur, for example, if you have duplicate vCenter connections open)
             If ($vMotion.Group.Count % 2 -eq 0) {
+                # New 6.5 migration event type is changing fields around on me
+                If ($vMotion.Group[0].EventTypeID -eq 'com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent') {
+                    $DstDC   = ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destDatacenter'}).Value
+                    $DstDS   = ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destDatastore'}).Value
+                    $DstHost = ($vMotion.Group[0].Arguments | Where {$_.Key -eq 'destHost'}).Value
+                } Else {
+                    $DstDC   = $vMotion.Group[0].DestDatacenter.Name
+                    $DstDS   = $vMotion.Group[0].DestDatastore.Name
+                    $DstHost = $vMotion.Group[0].DestHost.Name
+                } #If 'com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent'
+
                 # Mark the current vMotion as vMotion / Storage vMotion / Both
-                If ($vMotion.Group[0].Ds.Name -eq $vMotion.Group[0].DestDatastore.Name) {
+                If ($vMotion.Group[0].Ds.Name -eq $DstDS) {
                     $Type = 'vMotion'
-                } ElseIf ($vMotion.Group[0].Host.Name -eq $vMotion.Group[0].DestHost.Name) {
+                } ElseIf ($vMotion.Group[0].Host.Name -eq $DstHost) {
                     $Type = 's-vMotion'
                 } Else {
                     $Type = 'Both'
@@ -241,21 +265,23 @@ https://github.com/brianbunke/vCmdlets
                     Name       = $vMotion.Group[0].Vm.Name
                     Type       = $Type
                     SrcHost    = $vMotion.Group[0].Host.Name
-                    DstHost    = $vMotion.Group[0].DestHost.Name
+                    DstHost    = $DstHost
                     SrcDS      = $vMotion.Group[0].Ds.Name
-                    DstDS      = $vMotion.Group[0].DestDatastore.Name
+                    DstDS      = $DstDS
+                    SrcDC      = $vMotion.Group[0].Datacenter.Name
+                    DstDC      = $DstDC
                     # Hopefully people aren't performing vMotions that take >24 hours, because I'm ignoring days in the string
                     Duration   = (New-TimeSpan -Start $vMotion.Group[0].CreatedTime -End $vMotion.Group[1].CreatedTime).ToString('hh\:mm\:ss')
-                    StartTime  = $vMotion.Group[0].CreatedTime
-                    EndTime    = $vMotion.Group[1].CreatedTime
+                    StartTime  = $vMotion.Group[0].CreatedTime.ToLocalTime()
+                    EndTime    = $vMotion.Group[1].CreatedTime.ToLocalTime()
                     # Making an assumption that all events with an empty username are DRS-initiated
                     Username   = &{If ($vMotion.Group[0].UserName) {$vMotion.Group[0].UserName} Else {'DRS'}}
                     ChainID    = $vMotion.Group[0].ChainID
                 }) | Out-Null
             } #If vMotion Group % 2
             ElseIf ($vMotion.Group.Count % 2 -eq 1) {
-                Write-Debug "vMotion chain ID $($vMotion.Group[0].ChainID) had an odd number of events; cannot match start/end times. Inspect `$vMotion for more details"
-                # Happening much more often for me on VCSA 6.5 (after Windows 6.0). Not sure why
+                Write-Debug "vMotion chain ID $($vMotion.Group[0].ChainID -join ', ') had an odd number of events; cannot match start/end times. Inspect `$vMotion for more details"
+                # If you're here, try to gather some details and tell me what happened! @brianbunke
             }
         } #ForEach ChainID
 
