@@ -24,8 +24,8 @@ Describe 'Get-DatastoreProvisioned' -Tag unit {
     
     It 'Receives expected ds0 values from vcsim' {
         # vcsim container defaults
-        $ds0.CapacityMB  | Should -Be 58
-        $ds0.FreeSpaceMB | Should -Be 53
+        $ds0.CapacityMB  | Should -Be 124
+        $ds0.FreeSpaceMB | Should -Be 92
         $ds0.ExtensionData.Summary.Capacity    | Should -Be 61664044
         $ds0.ExtensionData.Summary.FreeSpace   | Should -Be 56188984
         $ds0.ExtensionData.Summary.Uncommitted | Should -BeNullOrEmpty
@@ -37,8 +37,8 @@ Describe 'Get-DatastoreProvisioned' -Tag unit {
     }
 
     It 'Correctly calculates values' {
-        $Pipe1.FreeSpaceGB    | Should -Be .05
-        $Pipe1.CapacityGB     | Should -Be .06
+        $Pipe1.FreeSpaceGB    | Should -Be .09
+        $Pipe1.CapacityGB     | Should -Be .12
         $Pipe1.ProvisionedGB  | Should -Be .01
         $Pipe1.UsedPct        | Should -Be 8.62
         $Pipe1.ProvisionedPct | Should -Be 9

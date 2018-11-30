@@ -13,7 +13,7 @@ Connect-VIServer -Server localhost -Port 443 -User u -Password p
 
 # Temporary diagnostic work
 (Get-Datastore)[0] | fl
-(Get-Datastore)[0].ExtensionData.Summary
+(Get-Datastore)[0].ExtensionData.Summary | fl
 
 # Invoke-Pester runs all .Tests.ps1 in the order found by "Get-ChildItem -Recurse"
 Invoke-Pester -OutputFormat NUnitXml -OutputFile ".\TestResults.xml"
