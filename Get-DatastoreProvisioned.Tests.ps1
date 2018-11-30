@@ -12,9 +12,6 @@ Describe 'Get-DatastoreProvisioned' -Tag unit {
 
     ### ACT
 
-    # Connect to the vcsim Docker container running locally
-    Connect-VIServer -Server localhost -Port 443 -User u -Password p
-
     # Capture the datastore for further interaction
     $ds0 = Get-Datastore -Name LocalDS_0
     $ds1 = Get-Datastore -Name LocalDS_1
