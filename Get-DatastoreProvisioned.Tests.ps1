@@ -12,9 +12,6 @@ Describe 'Get-DatastoreProvisioned' -Tag unit {
 
     ### ACT
 
-    # Initial PowerCLI configuration after module installation
-    Set-PowerCLIConfiguration -Scope User -InvalidCertificateAction Ignore -ParticipateInCEIP $false -Confirm:$false
-
     # Connect to the vcsim Docker container running locally
     Connect-VIServer -Server localhost -Port 443 -User u -Password p
 

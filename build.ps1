@@ -5,5 +5,11 @@ $null = Install-Module Pester, VMware.PowerCLI -Scope CurrentUser -AllowClobber 
 
 Get-Module Pester, VMware.VimAutomation.Core -ListAvailable | Select Version, Name | Format-Table -Autosize
 
+# Initial PowerCLI configuration after module installation
+Set-PowerCLIConfiguration -Scope User -InvalidCertificateAction Ignore -ParticipateInCEIP $false -Confirm:$false
+
+# Temporary diagnostic work
+Get-Datastore | fl
+
 # Invoke-Pester runs all .Tests.ps1 in the order found by "Get-ChildItem -Recurse"
 Invoke-Pester -OutputFormat NUnitXml -OutputFile ".\TestResults.xml"
