@@ -1,10 +1,19 @@
-﻿Describe 'Get-DatastoreProvisioned' -Tag unit {
+﻿Describe 'Connectivity' -Tag unit {
+    It 'Sees the Docker container' {
+        Test-Connection localhost -TCPPort 443 | Should -BeTrue
+    }
+}
+
+Describe 'Get-DatastoreProvisioned' -Tag unit {
     ### ARRANGE
     
     # Dot source the function
     . $PSScriptRoot\Get-DatastoreProvisioned.ps1
 
     ### ACT
+
+    # Initial PowerCLI configuration after module installation
+    Set-PowerCLIConfiguration -Scope User -InvalidCertificateAction Ignore -ParticipateInCEIP $false -Confirm:$false
 
     # Connect to the vcsim Docker container running locally
     Connect-VIServer -Server localhost -Port 443 -User u -Password p
@@ -13,6 +22,7 @@
     $ds0 = Get-Datastore -Name LocalDS_0
     $ds1 = Get-Datastore -Name LocalDS_1
 
+    # Run the command twice, storing the results for assertions
     $Pipe1 = $ds0 | Get-DatastoreProvisioned
     $Pipe2 = $ds0, $ds1 | Get-DatastoreProvisioned
 
