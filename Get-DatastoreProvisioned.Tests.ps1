@@ -26,22 +26,22 @@ Describe 'Get-DatastoreProvisioned' -Tag unit {
         # vcsim container defaults
         $ds0.CapacityMB  | Should -Be 124
         $ds0.FreeSpaceMB | Should -Be 92
-        $ds0.ExtensionData.Summary.Capacity    | Should -Be 61664044
-        $ds0.ExtensionData.Summary.FreeSpace   | Should -Be 56188984
+        $ds0.ExtensionData.Summary.Capacity    | Should -Be 130046416
+        $ds0.ExtensionData.Summary.FreeSpace   | Should -Be 96935068
         $ds0.ExtensionData.Summary.Uncommitted | Should -BeNullOrEmpty
     }
 
     It 'Receives expected ds1 values from vcsim' {
         # Second datastore will have the same values. Just check one
-        $ds1.CapacityMB | Should -Be 58
+        $ds1.CapacityMB | Should -Be 124
     }
 
     It 'Correctly calculates values' {
         $Pipe1.FreeSpaceGB    | Should -Be .09
         $Pipe1.CapacityGB     | Should -Be .12
-        $Pipe1.ProvisionedGB  | Should -Be .01
-        $Pipe1.UsedPct        | Should -Be 8.62
-        $Pipe1.ProvisionedPct | Should -Be 9
+        $Pipe1.ProvisionedGB  | Should -Be .03
+        $Pipe1.UsedPct        | Should -Be 25.81
+        $Pipe1.ProvisionedPct | Should -Be 25.47
     }
 
     It 'Processes multiple objects via the pipeline' {
