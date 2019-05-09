@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION     1.1.0
+.VERSION     1.2.0
 .GUID        e4945281-2135-4365-a194-739fcf54456b
 .AUTHOR      Brian Bunke
 .DESCRIPTION Report on recent vMotion events in your VMware environment.
