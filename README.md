@@ -9,10 +9,10 @@ I have published `Get-VMotion` on the PowerShell Gallery; if you have PowerShell
 
 All scripts are available "as is," and are run at your own risk in a production environment.
 
-Brian Bunke: [GitHub] | [Twitter]
+Brian Bunke: [Blog] | [Twitter]
 
 [PowerCLI]: https://www.vmware.com/support/developer/PowerCLI/
 [PowerShell Gallery]: https://www.powershellgallery.com/
 [PowerCLI Community Repository]: https://github.com/vmware/PowerCLI-Example-Scripts
-[GitHub]: https://github.com/brianbunke
+[Blog]: https://www.brianbunke.com
 [Twitter]: https://twitter.com/brianbunke
