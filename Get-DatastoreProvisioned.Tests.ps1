@@ -1,55 +1,59 @@
-﻿Describe 'Connectivity' -Tag unit {
-    It 'Sees the Docker container' {
-        Test-Connection localhost -TCPPort 443 | Should -BeTrue
-    }
-}
-
+﻿
 Describe 'Get-DatastoreProvisioned' -Tag unit {
     ### ARRANGE
     
     # Dot source the function
     . $PSScriptRoot\Get-DatastoreProvisioned.ps1
+    
+    # Import the mock object module
+    If (Get-Module VMware.VimAutomation.Core) {
+        Remove-Module VMware.VimAutomation.Core -Force
+    }
+    Import-Module $PSScriptRoot\TestHelpers\VMware.VimAutomation.Core.psd1
 
     ### ACT
 
-    # Capture the datastore for further interaction
-    $ds0 = Get-Datastore -Name LocalDS_0
-    $ds1 = Get-Datastore -Name LocalDS_1
+    # Create the mock's script block
+    $dsMockObject = {
+        return [VMware.VimAutomation.ViCore.Impl.V1.DatastoreManagement.DatastoreImpl] @{
+            Name        = 'asdf'
+            CapacityGB  = [decimal]12.055664063
+            CapacityMB  = [decimal]12345
+            FreeSpaceGB = [decimal]6.629882813
+            FreeSpaceMB = [decimal]6789
 
-    # Run the command twice, storing the results for assertions
-    $Pipe1 = $ds0 | Get-DatastoreProvisioned
-    $Pipe2 = $ds0, $ds1 | Get-DatastoreProvisioned
+            ExtensionData = [VMware.Vim.Datastore] @{
+                Summary = [VMware.Vim.DatastoreSummary] @{
+                    Capacity    = [int64]12944670720
+                    FreeSpace   = [int64]7118782464
+                }
+            }
+        }
+    }
+
+    Mock -CommandName Get-Datastore -MockWith $dsMockObject
+
+    # Capture the datastore for further interaction
+    $ds = Get-Datastore
+
+    # Run the command, storing the results for assertions
+    $Pipe = $ds | Get-DatastoreProvisioned
 
     ### ASSERT
     
-    It 'Receives expected ds0 values from vcsim' {
-        # vcsim container defaults
-        $ds0.CapacityMB  | Should -Be 124
-        $ds0.FreeSpaceMB | Should -Be 92
-
-        # Exempting these tests because the numbers vary (e.g. 96935068 vs. 96935152)
-        # Hoping the calculations below are good enough
-        <#
-        $ds0.ExtensionData.Summary.Capacity    | Should -Be 130046416
-        $ds0.ExtensionData.Summary.FreeSpace   | Should -Be 96935068
-        $ds0.ExtensionData.Summary.Uncommitted | Should -BeNullOrEmpty
-        #>
-    }
-
-    It 'Receives expected ds1 values from vcsim' {
-        $ds1.CapacityMB  | Should -Be 124
-        $ds1.FreeSpaceMB | Should -Be 92
+    It 'Receives expected ds values from the mock object' {
+        $ds.CapacityMB  | Should -Be 12345
+        $ds.FreeSpaceMB | Should -Be 6789
+        $ds.ExtensionData.Summary.Capacity    | Should -Be 12944670720
+        $ds.ExtensionData.Summary.FreeSpace   | Should -Be 7118782464
+        $ds.ExtensionData.Summary.Uncommitted | Should -BeNullOrEmpty
     }
 
     It 'Correctly calculates values' {
-        $Pipe1.FreeSpaceGB    | Should -Be .09
-        $Pipe1.CapacityGB     | Should -Be .12
-        $Pipe1.ProvisionedGB  | Should -Be .03
-        $Pipe1.UsedPct        | Should -Be 25.81
-        $Pipe1.ProvisionedPct | Should -Be 25.47
-    }
-
-    It 'Processes multiple objects via the pipeline' {
-        $Pipe2.Count | Should -Be 2
+        $Pipe.FreeSpaceGB    | Should -Be 6.63
+        $Pipe.CapacityGB     | Should -Be 12.06
+        $Pipe.ProvisionedGB  | Should -Be 5.43
+        $Pipe.UsedPct        | Should -Be 45.01
+        $Pipe.ProvisionedPct | Should -Be 45.01
     }
 }
