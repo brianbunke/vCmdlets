@@ -1,6 +1,6 @@
 ﻿# These tests are so flaky because I can't dictate datastore size in vcsim right now :(
 
-Describe 'Get-DatastoreProvisioned' -Tag unit {
+Describe 'Get-DatastoreProvisioned' -Tag integration {
     ### ARRANGE
     
     # Dot source the function
@@ -8,7 +8,7 @@ Describe 'Get-DatastoreProvisioned' -Tag unit {
 
     ### ACT
     
-    Connect-VIServer -Server localhost -Port 443 -User u -Pass p
+    Connect-VIServer -Server localhost -Port 443 -User u -Pass p -Force
 
     # Capture the datastore for further interaction
     $ds0 = Get-Datastore -Name LocalDS_0

@@ -5,7 +5,7 @@ Describe 'Connectivity' {
 }
 
 Describe 'PowerCLI' {
-    Connect-VIServer -Server localhost -Port 443 -User u -Pass p
+    Connect-VIServer -Server localhost -Port 443 -User u -Pass p -Force
 
     It 'Returns one datacenter' {
         (Get-Datacenter).Count | Should -Be 1
