@@ -1,4 +1,6 @@
-﻿Describe 'Get-DatastoreProvisioned' -Tag unit {
+﻿# These tests are so flaky because I can't dictate datastore size in vcsim right now :(
+
+Describe 'Get-DatastoreProvisioned' -Tag unit {
     ### ARRANGE
     
     # Dot source the function
@@ -19,16 +21,16 @@
     
     It 'Receives expected ds0 values from vcsim' {
         # vcsim container defaults
-        $ds0.CapacityMB  | Should -Be 58
-        $ds0.FreeSpaceMB | Should -Be 53
+        $ds0.CapacityMB  | Should -Be 124
+        $ds0.FreeSpaceMB | Should -Be 92
     }
 
     It 'Correctly calculates values' {
-        $Pipe1.FreeSpaceGB    | Should -Be .05
-        $Pipe1.CapacityGB     | Should -Be .06
-        $Pipe1.ProvisionedGB  | Should -Be 0
-        $Pipe1.UsedPct        | Should -Be 8.62
-        $Pipe1.ProvisionedPct | Should -Be 8.37
+        $Pipe1.FreeSpaceGB    | Should -Be .09
+        $Pipe1.CapacityGB     | Should -Be .12
+        $Pipe1.ProvisionedGB  | Should -Be .03
+        $Pipe1.UsedPct        | Should -Be 25.81
+        $Pipe1.ProvisionedPct | Should -Be 25.47
     }
 
     It 'Processes multiple objects via the pipeline' {
