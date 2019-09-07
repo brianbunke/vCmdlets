@@ -3,19 +3,25 @@ jobs:
     pool:
       vmImage: ubuntu-16.04
     steps:
-    # Install and run vcsim Docker container
-    # "--ds 2" creates two datastores instead of the default one
-    - script: |
-        docker run --rm -d -p 443:443/tcp nimmis/vcsim --ds 2
+    # (PowerShell Core included in this Ubuntu image)
+
+    - script:      docker run --rm -d -p 443:443/tcp nimmis/vcsim
       displayName: 'Run vCenter Simulator container'
-    # Run Pester tests
-    - script: |
-        pwsh -c '.\build.ps1'
-      displayName: 'Build and Test'
-    # Analyze test results
+    
+    - powershell:  ./build.ps1 -Verbose
+      displayName: 'Install PowerShell Modules'
+    
+    - powershell: |
+        $TestResults = Invoke-Pester -OutputFormat NUnitXml -OutputFile ".\TestResults.xml" -PassThru
+        If ($TestResults.FailedCount -ne 0) {
+            Write-Error "$($TestResults.FailedCount) test(s) failed"
+        }
+      displayName: 'Run Pester tests'
+    
     - task: PublishTestResults@2
+      condition: always()
       inputs:
-        testRunner: 'NUnit'
+        testRunner:       'NUnit'
         testResultsFiles: '**/TestResults.xml'
-        testRunTitle: 'Ubuntu1604'
+        testRunTitle:     'Ubuntu1604'
       displayName: 'Publish Test Results'
