@@ -5,6 +5,8 @@
     . $PSScriptRoot\..\Get-DatastoreProvisioned.ps1
 
     ### ACT
+    
+    Connect-VIServer -Server localhost -Port 443 -User u -Pass p
 
     # Capture the datastore for further interaction
     $ds0 = Get-Datastore -Name LocalDS_0
